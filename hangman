@@ -1,0 +1,114 @@
+#!/bin/bash
+
+function trap_handler {
+    clear
+    echo ":("
+    echo "The correct word was $word"
+    exit 0
+}
+
+trap trap_handler SIGINT
+
+# final variables
+standardDictionary=/usr/share/dict/words
+alphabet="abcdefghijklmnopqrstuvwxyz"
+
+# helper functions
+function clear {
+    printf "\ec"
+}
+function randomWord () {
+    dictionary=("${@}")
+    rand=$(shuf -i 1-${#dictionary[@]} -n 1)
+    word=${dictionary[$rand]}
+}
+
+# setup
+while getopts "w:d:" opt; do
+    case $opt in
+        w)
+            word=$OPTARG
+            ;;
+        d)
+            if [ -z $word ]; then
+                if [ -f $OPTARG ]; then
+                    readarray wordArray < $OPTARG
+                    randomWord "${wordArray[@]}"
+                else
+                    echo This dictionary does not exist
+                    exit 1
+                fi
+            fi
+            ;;
+        *)
+            exit 2
+            ;;
+        :)
+            echo Invalid argument, please refer to the manual page for more info
+            ;;
+    esac
+done
+
+if [ -z $word ]; then
+    readarray wordArray <<< $(grep -v "'" $standardDictionary)
+    randomWord "${wordArray[@]}"
+fi
+
+# game
+chancesLeft=10
+wordCharacterCount=$(expr length $word)
+for c in $(seq 1 $wordCharacterCount); do
+    guessedWord="${guessedWord}."
+done
+echo $input
+
+unguessedWord="${word}"
+
+characterError=false
+wrongCharacter=false
+alphabetError=false
+until [ $word == $guessedWord ]; do
+    if [ $chancesLeft -eq 0 ]; then
+        clear
+        echo 'Quit (core dumped)!'
+        echo Gnome im kdeing, just a joke you lost...
+        exit 0
+    fi
+    clear
+    echo "Guessed word: $guessedWord"
+    echo "Character left: $alphabet"
+    echo "You have $chancesLeft chances left"
+    if $characterError; then
+        echo You have to enter one character
+        characterError=false
+    elif $alphabetError; then
+        echo That character is already used or not in the alphabet
+        alphabetError=false
+    elif $wrongCharacter; then
+        echo That character is not in the word
+        wrongCharacter=false
+    fi
+    read input
+    if [ ${#input} -ne 1 ]; then
+        characterError=true
+    else
+        if grep -q $input <<< $alphabet; then
+            # replacing the input in the alphabet with notih
+            alphabet=$(sed s/$input//g <<< $alphabet)
+            if grep -q $input <<< $word; then
+                until [ $(expr index $unguessedWord $input) -eq 0 ]; do
+                    index=$(expr index $unguessedWord $input)
+                    guessedWord=$(sed s/./$input/$index <<< $guessedWord)
+                    unguessedWord=$(sed s/$input/./1 <<< $unguessedWord)
+                done
+            else
+                wrongCharacter=true
+                ((chancesLeft--))
+            fi
+        else 
+            alphabetError=true
+        fi
+    fi
+done
+clear
+echo You won!
